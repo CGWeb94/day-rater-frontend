@@ -23,16 +23,18 @@ export default function App() {
   // 👇 Neu: State für Startscreen
   const [started, setStarted] = useState(false);
 
-  async function load() {
-    setLoading(true);
-    const [eRes, sRes] = await Promise.all([
-      fetch(`${API}/entries`),
-      fetch(`${API}/stats`)
-    ]);
-    setEntries(await eRes.json());
-    setStats(await sRes.json());
-    setLoading(false);
-  }
+async function load() {
+  setLoading(true);
+  const [eRes, sRes] = await Promise.all([
+    fetch(`${API}/entries`),
+    fetch(`${API}/stats`)
+  ]);
+  const entriesData = await eRes.json();
+  setEntries(Array.isArray(entriesData) ? entriesData : []);
+  const statsData = await sRes.json();
+  setStats(statsData);
+  setLoading(false);
+}
 
   useEffect(() => { load(); }, []);
 
