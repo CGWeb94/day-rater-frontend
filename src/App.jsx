@@ -211,7 +211,7 @@ export default function App() {
                   <li key={e.id} style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                       <div>
-                        <b>{e.date}</b> — {e.score}/100
+                        <b>{e.date.slice(0, 10)}</b> — {e.score}/100
                         {e.text && <div style={{ opacity: 0.85, marginTop: 4 }}>{e.text}</div>}
                       </div>
                       <button onClick={() => deleteEntry(e.id)} style={{ cursor: "pointer" }}>
