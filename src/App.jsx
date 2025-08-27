@@ -19,49 +19,66 @@ export default function App() {
   const [entries, setEntries] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
-
-  // 👇 Neu: State für Startscreen
   const [started, setStarted] = useState(false);
 
-async function load() {
-  setLoading(true);
-  const [eRes, sRes] = await Promise.all([
-    fetch(`${API}/entries`),
-    fetch(`${API}/stats`)
-  ]);
-  const entriesData = await eRes.json();
-  setEntries(Array.isArray(entriesData) ? entriesData : []);
-  const statsData = await sRes.json();
-  setStats(statsData);
-  setLoading(false);
-}
+  // Demo userId für jeden Nutzer (später durch echten Nutzer ersetzen)
+  const userId = localStorage.getItem("userId") || "demo";
+
+  async function load() {
+    setLoading(true);
+    try {
+      // Nur Einträge für diesen Nutzer abrufen
+      const [eRes, sRes] = await Promise.all([
+        fetch(`${API}/entries?user_id=${userId}`),
+        fetch(`${API}/stats?user_id=${userId}`)
+      ]);
+      const entriesData = await eRes.json();
+      setEntries(Array.isArray(entriesData) ? entriesData : []);
+      const statsData = await sRes.json();
+      setStats(statsData);
+    } catch (err) {
+      console.error(err);
+      setEntries([]);
+      setStats(null);
+    }
+    setLoading(false);
+  }
 
   useEffect(() => { load(); }, []);
 
   async function saveEntry() {
     if (score < 1 || score > 100) return alert("Score muss 1–100 sein.");
-    const res = await fetch(`${API}/entries`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date, score: Number(score), text })
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      return alert(err.error || "Fehler beim Speichern");
+    try {
+      const res = await fetch(`${API}/entries`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, score: Number(score), text, user_id: userId })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        return alert(err.error || "Fehler beim Speichern");
+      }
+      setText("");
+      setScore(50);
+      setDate(todayLocalISO());
+      await load();
+    } catch (err) {
+      console.error(err);
+      alert("Fehler beim Speichern");
     }
-    setText("");
-    setScore(50);
-    setDate(todayLocalISO());
-    await load();
   }
 
   async function deleteEntry(id) {
     if (!confirm("Eintrag wirklich löschen?")) return;
-    await fetch(`${API}/entries/${id}`, { method: "DELETE" });
-    await load();
+    try {
+      await fetch(`${API}/entries/${id}`, { method: "DELETE" });
+      await load();
+    } catch (err) {
+      console.error(err);
+      alert("Fehler beim Löschen");
+    }
   }
 
-  // Chart-Daten
   const chartData = useMemo(() => {
     const copy = [...entries].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
     return copy.map(e => ({ date: e.date, score: e.score }));
@@ -69,7 +86,6 @@ async function load() {
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: 16, fontFamily: "system-ui, sans-serif" }}>
-      {/* 👇 Startscreen */}
       {!started && (
         <div
           style={{
@@ -104,7 +120,6 @@ async function load() {
         </div>
       )}
 
-      {/* 👇 Hauptinhalt erst nach Klick sichtbar */}
       <div style={{
         opacity: started ? 1 : 0,
         transition: "opacity 0.8s ease"
