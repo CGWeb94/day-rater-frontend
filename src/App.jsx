@@ -1,8 +1,13 @@
-// client/src/App.jsx
 import { useEffect, useMemo, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from "recharts";
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
 
 const API = "https://day-rater-server.onrender.com";
 
@@ -20,17 +25,37 @@ export default function App() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
   const [started, setStarted] = useState(false);
+  const [user, setUser] = useState(null);
 
-  // Demo userId für jeden Nutzer (später durch echten Nutzer ersetzen)
-  const userId = localStorage.getItem("userId") || "demo";
+  // Supabase Auth State
+  useEffect(() => {
+    const session = supabase.auth.session();
+    setUser(session?.user ?? null);
+
+    supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+  }, []);
+
+  async function signIn() {
+    const email = prompt("Deine Email:");
+    const password = prompt("Dein Passwort:");
+    const { error } = await supabase.auth.signIn({ email, password });
+    if (error) return alert(error.message);
+  }
+
+  async function signOut() {
+    await supabase.auth.signOut();
+    setUser(null);
+  }
 
   async function load() {
+    if (!user) return;
     setLoading(true);
     try {
-      // Nur Einträge für diesen Nutzer abrufen
       const [eRes, sRes] = await Promise.all([
-        fetch(`${API}/entries?user_id=${userId}`),
-        fetch(`${API}/stats?user_id=${userId}`)
+        fetch(`${API}/entries?user_id=${user.id}`),
+        fetch(`${API}/stats?user_id=${user.id}`)
       ]);
       const entriesData = await eRes.json();
       setEntries(Array.isArray(entriesData) ? entriesData : []);
@@ -44,15 +69,16 @@ export default function App() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [user]);
 
   async function saveEntry() {
+    if (!user) return alert("Bitte zuerst anmelden!");
     if (score < 1 || score > 100) return alert("Score muss 1–100 sein.");
     try {
       const res = await fetch(`${API}/entries`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, score: Number(score), text, user_id: userId })
+        body: JSON.stringify({ date, score: Number(score), text, user_id: user.id })
       });
       if (!res.ok) {
         const err = await res.json();
@@ -84,147 +110,92 @@ export default function App() {
     return copy.map(e => ({ date: e.date, score: e.score }));
   }, [entries]);
 
+  if (!user) {
+    return (
+      <div style={{ maxWidth: 900, margin: "0 auto", padding: 16, fontFamily: "system-ui, sans-serif", textAlign: "center" }}>
+        <h1>Bitte einloggen</h1>
+        <button onClick={signIn} style={{ padding: "10px 20px", fontSize: "1rem" }}>Login</button>
+      </div>
+    );
+  }
+
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: 16, fontFamily: "system-ui, sans-serif" }}>
+      <button onClick={signOut} style={{ marginBottom: 16 }}>Logout</button>
+
       {!started && (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            height: "100vh",
-            textAlign: "center",
-            transition: "opacity 0.6s ease",
-            opacity: started ? 0 : 1
-          }}
-        >
-          <h1 style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>Hi Bea! 👋</h1>
-          <button
-            onClick={() => setStarted(true)}
-            style={{
-              padding: "12px 20px",
-              fontSize: "1.1rem",
-              borderRadius: "8px",
-              cursor: "pointer",
-              border: "none",
-              background: "#007bff",
-              color: "white",
-              transition: "transform 0.2s"
-            }}
-            onMouseDown={(e) => e.currentTarget.style.transform = "scale(0.95)"}
-            onMouseUp={(e) => e.currentTarget.style.transform = "scale(1)"}
-          >
-            Tracken
-          </button>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "50vh", textAlign: "center" }}>
+          <h1>Hi {user.email} 👋</h1>
+          <button onClick={() => setStarted(true)}>Tracken</button>
         </div>
       )}
 
-      <div style={{
-        opacity: started ? 1 : 0,
-        transition: "opacity 0.8s ease"
-      }}>
-        {started && (
-          <>
-            <h1>🌞 Day Rater</h1>
-            <p style={{ opacity: 0.8 }}>
-              Jeden Tag zwischen <b>1–100</b> bewerten + Notiz festhalten.
-            </p>
+      {started && (
+        <>
+          <h1>🌞 Day Rater</h1>
+          <p style={{ opacity: 0.8 }}>Jeden Tag zwischen <b>1–100</b> bewerten + Notiz festhalten.</p>
 
-            <section style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr" }}>
-              <label>
-                Datum<br />
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  max={todayLocalISO()}
-                />
-              </label>
+          <section style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr" }}>
+            <label>
+              Datum<br />
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} max={todayLocalISO()} />
+            </label>
 
-              <label>
-                Score: <b>{score}</b>
-                <input
-                  type="range"
-                  min="1"
-                  max="100"
-                  value={score}
-                  onChange={(e) => setScore(Number(e.target.value))}
-                  style={{ width: "100%" }}
-                />
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  value={score}
-                  onChange={(e) => setScore(Number(e.target.value))}
-                />
-              </label>
+            <label>
+              Score: <b>{score}</b>
+              <input type="range" min="1" max="100" value={score} onChange={(e) => setScore(Number(e.target.value))} style={{ width: "100%" }} />
+              <input type="number" min="1" max="100" value={score} onChange={(e) => setScore(Number(e.target.value))} />
+            </label>
 
-              <label>
-                Notiz<br />
-                <textarea
-                  rows={3}
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder="Wie war dein Tag?"
-                  style={{ width: "100%" }}
-                />
-              </label>
+            <label>
+              Notiz<br />
+              <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="Wie war dein Tag?" style={{ width: "100%" }} />
+            </label>
 
-              <button onClick={saveEntry} style={{ padding: "10px 14px", cursor: "pointer" }}>
-                Speichern
-              </button>
-            </section>
+            <button onClick={saveEntry} style={{ padding: "10px 14px", cursor: "pointer" }}>Speichern</button>
+          </section>
 
-            <hr style={{ margin: "24px 0" }} />
+          <hr style={{ margin: "24px 0" }} />
 
-            <section>
-              <h2>Verlauf</h2>
-              {loading ? <p>Lade…</p> : (
-                <div style={{ width: "100%", height: 300 }}>
-                  <ResponsiveContainer>
-                    <LineChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" />
-                      <YAxis domain={[0, 100]} />
-                      <Tooltip />
-                      <Line type="monotone" dataKey="score" dot />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-              {stats && (
-                <p style={{ marginTop: 8 }}>
-                  Einträge: <b>{stats.count || 0}</b> · Durchschnitt: <b>{stats.avg ?? "-"}</b> · Min: <b>{stats.min ?? "-"}</b> · Max: <b>{stats.max ?? "-"}</b>
-                </p>
-              )}
-            </section>
+          <section>
+            <h2>Verlauf</h2>
+            {loading ? <p>Lade…</p> : (
+              <div style={{ width: "100%", height: 300 }}>
+                <ResponsiveContainer>
+                  <LineChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis domain={[0, 100]} />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="score" dot />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+            {stats && <p style={{ marginTop: 8 }}>Einträge: <b>{stats.count || 0}</b> · Durchschnitt: <b>{stats.avg ?? "-"}</b> · Min: <b>{stats.min ?? "-"}</b> · Max: <b>{stats.max ?? "-"}</b></p>}
+          </section>
 
-            <hr style={{ margin: "24px 0" }} />
+          <hr style={{ margin: "24px 0" }} />
 
-            <section>
-              <h2>Letzte Einträge</h2>
-              {!entries.length && <p>Noch keine Einträge 🙃</p>}
-              <ul style={{ listStyle: "none", padding: 0, display: "grid", gap: 8 }}>
-                {entries.map(e => (
-                  <li key={e.id} style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                      <div>
-                        <b>{e.date.slice(0, 10)}</b> — {e.score}/100
-                        {e.text && <div style={{ opacity: 0.85, marginTop: 4 }}>{e.text}</div>}
-                      </div>
-                      <button onClick={() => deleteEntry(e.id)} style={{ cursor: "pointer" }}>
-                        Löschen
-                      </button>
+          <section>
+            <h2>Letzte Einträge</h2>
+            {!entries.length && <p>Noch keine Einträge 🙃</p>}
+            <ul style={{ listStyle: "none", padding: 0, display: "grid", gap: 8 }}>
+              {entries.map(e => (
+                <li key={e.id} style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                    <div>
+                      <b>{e.date.slice(0, 10)}</b> — {e.score}/100
+                      {e.text && <div style={{ opacity: 0.85, marginTop: 4 }}>{e.text}</div>}
                     </div>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          </>
-        )}
-      </div>
+                    <button onClick={() => deleteEntry(e.id)} style={{ cursor: "pointer" }}>Löschen</button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </>
+      )}
     </div>
   );
 }
