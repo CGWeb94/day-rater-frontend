@@ -28,20 +28,22 @@ export default function App() {
   const [started, setStarted] = useState(false);
   const [user, setUser] = useState(null);
 
-useEffect(() => {
-  async function init() {
-    const { data: { session } } = await supabase.auth.getSession();
-    setUser(session?.user ?? null);
-  }
-  init();
+  // --- Auth State ---
+  useEffect(() => {
+    async function init() {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user ?? null);
+    }
+    init();
 
-  const { subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-    setUser(session?.user ?? null);
-  });
+    const { subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    
+    return () => subscription.unsubscribe();
+  }, []);
 
-  return () => subscription.unsubscribe();
-}, []);
-
+  // --- Auth functions ---
   async function signUp() {
     const email = prompt("Deine Email:");
     const password = prompt("Dein Passwort:");
@@ -64,22 +66,20 @@ useEffect(() => {
     setUser(null);
   }
 
+  // --- Load entries & stats ---
   async function load() {
     if (!user) return;
     setLoading(true);
     try {
-      const session = supabase.auth.session();
+      const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) throw new Error("Kein gültiger Token");
 
       const [eRes, sRes] = await Promise.all([
-        fetch(`${API}/entries`, {
-          headers: { Authorization: `Bearer ${token}` }
-        }),
-        fetch(`${API}/stats`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
+        fetch(`${API}/entries`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API}/stats`, { headers: { Authorization: `Bearer ${token}` } })
       ]);
+
       const entriesData = await eRes.json();
       setEntries(Array.isArray(entriesData) ? entriesData : []);
       const statsData = await sRes.json();
@@ -94,11 +94,12 @@ useEffect(() => {
 
   useEffect(() => { load(); }, [user]);
 
+  // --- Save entry ---
   async function saveEntry() {
     if (!user) return alert("Bitte zuerst anmelden!");
     if (score < 1 || score > 100) return alert("Score muss 1–100 sein.");
     try {
-      const session = supabase.auth.session();
+      const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       const res = await fetch(`${API}/entries`, {
         method: "POST",
@@ -122,10 +123,11 @@ useEffect(() => {
     }
   }
 
+  // --- Delete entry ---
   async function deleteEntry(id) {
     if (!confirm("Eintrag wirklich löschen?")) return;
     try {
-      const session = supabase.auth.session();
+      const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       await fetch(`${API}/entries/${id}`, {
         method: "DELETE",
@@ -138,11 +140,13 @@ useEffect(() => {
     }
   }
 
+  // --- Chart data ---
   const chartData = useMemo(() => {
     const copy = [...entries].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
     return copy.map(e => ({ date: e.date, score: e.score }));
   }, [entries]);
 
+  // --- Render ---
   if (!user) {
     return (
       <div style={{ maxWidth: 900, margin: "0 auto", padding: 16, fontFamily: "system-ui, sans-serif", textAlign: "center" }}>
