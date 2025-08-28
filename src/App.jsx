@@ -4,6 +4,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from "recharts";
 
+// Supabase Client
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -37,10 +38,20 @@ export default function App() {
     });
   }, []);
 
+  async function signUp() {
+    const email = prompt("Deine Email:");
+    const password = prompt("Dein Passwort:");
+    if (!email || !password) return alert("Email & Passwort nötig");
+    const { error } = await supabase.auth.signUp({ email, password });
+    if (error) return alert(error.message);
+    alert("Signup erfolgreich! Bitte bestätige deine Email.");
+  }
+
   async function signIn() {
     const email = prompt("Deine Email:");
     const password = prompt("Dein Passwort:");
-    const { error } = await supabase.auth.signIn({ email, password });
+    if (!email || !password) return alert("Email & Passwort nötig");
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return alert(error.message);
   }
 
@@ -53,9 +64,17 @@ export default function App() {
     if (!user) return;
     setLoading(true);
     try {
+      const session = supabase.auth.session();
+      const token = session?.access_token;
+      if (!token) throw new Error("Kein gültiger Token");
+
       const [eRes, sRes] = await Promise.all([
-        fetch(`${API}/entries?user_id=${user.id}`),
-        fetch(`${API}/stats?user_id=${user.id}`)
+        fetch(`${API}/entries`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch(`${API}/stats`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
       ]);
       const entriesData = await eRes.json();
       setEntries(Array.isArray(entriesData) ? entriesData : []);
@@ -75,10 +94,15 @@ export default function App() {
     if (!user) return alert("Bitte zuerst anmelden!");
     if (score < 1 || score > 100) return alert("Score muss 1–100 sein.");
     try {
+      const session = supabase.auth.session();
+      const token = session?.access_token;
       const res = await fetch(`${API}/entries`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, score: Number(score), text, user_id: user.id })
+        headers: { 
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ date, score: Number(score), text })
       });
       if (!res.ok) {
         const err = await res.json();
@@ -97,7 +121,12 @@ export default function App() {
   async function deleteEntry(id) {
     if (!confirm("Eintrag wirklich löschen?")) return;
     try {
-      await fetch(`${API}/entries/${id}`, { method: "DELETE" });
+      const session = supabase.auth.session();
+      const token = session?.access_token;
+      await fetch(`${API}/entries/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
       await load();
     } catch (err) {
       console.error(err);
@@ -114,7 +143,8 @@ export default function App() {
     return (
       <div style={{ maxWidth: 900, margin: "0 auto", padding: 16, fontFamily: "system-ui, sans-serif", textAlign: "center" }}>
         <h1>Bitte einloggen</h1>
-        <button onClick={signIn} style={{ padding: "10px 20px", fontSize: "1rem" }}>Login</button>
+        <button onClick={signUp} style={{ margin: 8, padding: "10px 20px" }}>Signup</button>
+        <button onClick={signIn} style={{ margin: 8, padding: "10px 20px" }}>Login</button>
       </div>
     );
   }
