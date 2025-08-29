@@ -143,7 +143,7 @@ export default function App() {
   // --- Chart data ---
   const chartData = useMemo(() => {
     const copy = [...entries].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
-    return copy.map(e => ({ date: e.date, score: e.score }));
+    return copy.map(e => ({ date: e.date.slice(0, 10), score: e.score }));
   }, [entries]);
 
   // --- Render ---
