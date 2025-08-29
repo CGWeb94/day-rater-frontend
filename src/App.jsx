@@ -94,6 +94,16 @@ export default function App() {
 
   useEffect(() => { load(); }, [user]);
 
+  function scoreToColor(score) {
+    let hue;
+    if (score <= 50) {
+      hue = (score / 50) * 60; // rot -> gelb
+    } else {
+      hue = 60 + ((score - 50) / 50) * 60; // gelb -> grün
+    }
+    return `hsl(${hue}, 100%, 50%)`;
+  }
+
   // --- Save entry ---
   async function saveEntry() {
     if (!user) return alert("Bitte zuerst anmelden!");
@@ -101,13 +111,17 @@ export default function App() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
+      if (!token) throw new Error("Kein gültiger Token");
+      const color = scoreToColor(score);
+
+
       const res = await fetch(`${API}/entries`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ date, score: Number(score), text })
+        body: JSON.stringify({ date, score: Number(score), text, color })
       });
       if (!res.ok) {
         const err = await res.json();
@@ -221,17 +235,27 @@ export default function App() {
             <ul style={{ listStyle: "none", padding: 0, display: "grid", gap: 8 }}>
               {entries.map(e => (
                 <li key={e.id} style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
                     <div>
                       <b>{e.date.slice(0, 10)}</b> — {e.score}/100
                       {e.text && <div style={{ opacity: 0.85, marginTop: 4 }}>{e.text}</div>}
                     </div>
+
+                    {/* Farb-Rechteck */}
+                    <div style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 4,
+                      backgroundColor: e.color ?? "#ccc" // fallback, falls keine Farbe
+                    }} />
+
                     <button onClick={() => deleteEntry(e.id)} style={{ cursor: "pointer" }}>Löschen</button>
                   </div>
                 </li>
               ))}
             </ul>
           </section>
+
         </>
       )}
     </div>
