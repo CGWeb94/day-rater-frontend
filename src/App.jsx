@@ -1,109 +1,113 @@
-import React, { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import {
-  LineChart,
-  Line,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from "recharts";
 
+// Supabase Client
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
-const API = import.meta.env.VITE_API_URL;
+const API = "https://day-rater-server.onrender.com";
 
 function todayLocalISO() {
-  return new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const offMs = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - offMs).toISOString().slice(0, 10);
 }
 
 export default function App() {
-  const [user, setUser] = useState(null);
+  const [date, setDate] = useState(todayLocalISO());
+  const [score, setScore] = useState(50);
+  const [text, setText] = useState("");
   const [entries, setEntries] = useState([]);
   const [stats, setStats] = useState(null);
-  const [text, setText] = useState("");
-  const [score, setScore] = useState(50);
-  const [date, setDate] = useState(todayLocalISO());
-  const [loading, setLoading] = useState(false); // für Daten laden
-  const [globalLoading, setGlobalLoading] = useState(true); // Overlay
-
+  const [loading, setLoading] = useState(false);
   const [started, setStarted] = useState(false);
+  const [user, setUser] = useState(null);
 
-  // --- Auth state ---
+  // --- Auth State ---
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    async function init() {
+      const { data: { session } } = await supabase.auth.getSession();
       setUser(session?.user ?? null);
-      setGlobalLoading(false);
-    });
-    supabase.auth.onAuthStateChange((_event, session) => {
+    }
+    init();
+
+    const { subscription } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });
+    
+    return () => subscription.unsubscribe();
   }, []);
 
-  // --- Load entries + stats ---
-  async function load() {
-    if (!user) return;
-    setLoading(true);
-    setGlobalLoading(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      const res = await fetch(`${API}/entries`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      setEntries(data.entries || []);
-      setStats(data.stats || null);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-      setGlobalLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    if (user) load();
-  }, [user]);
-
-  // --- Auth helpers ---
+  // --- Auth functions ---
   async function signUp() {
-    const email = prompt("Email:");
-    const password = prompt("Passwort:");
-    if (!email || !password) return;
+    const email = prompt("Deine Email:");
+    const password = prompt("Dein Passwort:");
+    if (!email || !password) return alert("Email & Passwort nötig");
     const { error } = await supabase.auth.signUp({ email, password });
-    if (error) alert(error.message);
-    else alert("Check deine Emails zum Bestätigen!");
+    if (error) return alert(error.message);
+    alert("Signup erfolgreich! Bitte bestätige deine Email.");
   }
 
   async function signIn() {
-    const email = prompt("Email:");
-    const password = prompt("Passwort:");
-    if (!email || !password) return;
+    const email = prompt("Deine Email:");
+    const password = prompt("Dein Passwort:");
+    if (!email || !password) return alert("Email & Passwort nötig");
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) alert(error.message);
+    if (error) return alert(error.message);
   }
 
   async function signOut() {
     await supabase.auth.signOut();
+    setUser(null);
   }
+
+  // --- Load entries & stats ---
+  async function load() {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("Kein gültiger Token");
+
+      const [eRes, sRes] = await Promise.all([
+        fetch(`${API}/entries`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API}/stats`, { headers: { Authorization: `Bearer ${token}` } })
+      ]);
+
+      const entriesData = await eRes.json();
+      setEntries(Array.isArray(entriesData) ? entriesData : []);
+      const statsData = await sRes.json();
+      setStats(statsData);
+    } catch (err) {
+      console.error(err);
+      setEntries([]);
+      setStats(null);
+    }
+    setLoading(false);
+  }
+
+  useEffect(() => { load(); }, [user]);
 
   // --- Save entry ---
   async function saveEntry() {
+    if (!user) return alert("Bitte zuerst anmelden!");
+    if (score < 1 || score > 100) return alert("Score muss 1–100 sein.");
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       const res = await fetch(`${API}/entries`, {
         method: "POST",
-        headers: {
+        headers: { 
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ date, score: Number(score), text }),
+        body: JSON.stringify({ date, score: Number(score), text })
       });
       if (!res.ok) {
         const err = await res.json();
@@ -127,7 +131,7 @@ export default function App() {
       const token = session?.access_token;
       await fetch(`${API}/entries/${id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}` }
       });
       await load();
     } catch (err) {
@@ -138,26 +142,9 @@ export default function App() {
 
   // --- Chart data ---
   const chartData = useMemo(() => {
-    const copy = [...entries].sort(
-      (a, b) => a.date.localeCompare(b.date) || a.id - b.id
-    );
-    return copy.map((e) => ({ date: e.date, score: e.score }));
+    const copy = [...entries].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+    return copy.map(e => ({ date: e.date, score: e.score }));
   }, [entries]);
-
-  // --- Loader Overlay ---
-  if (globalLoading) {
-    return (
-      <div style={{
-        position: "fixed",
-        top: 0, left: 0, right: 0, bottom: 0,
-        background: "rgba(255,255,255,0.9)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 24, fontFamily: "system-ui, sans-serif", zIndex: 9999
-      }}>
-        ⏳ Lade...
-      </div>
-    );
-  }
 
   // --- Render ---
   if (!user) {
