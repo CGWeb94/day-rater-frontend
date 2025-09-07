@@ -71,17 +71,20 @@ export default function App() {
   }
 
   // --- Verschlüsselung / Entschlüsselung ---
-  async function encryptText(plainText, key) {
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const enc = new TextEncoder();
-    const encoded = enc.encode(plainText);
-    const cipher = await crypto.subtle.encrypt(
-      { name: "AES-GCM", iv },
-      key,
-      encoded
-    );
-    return { cipherText: btoa(String.fromCharCode(...new Uint8Array(cipher))), iv: Array.from(iv) };
-  }
+async function encryptText(plainText, key) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const enc = new TextEncoder();
+  const encoded = enc.encode(plainText);
+  const cipher = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    encoded
+  );
+  return { 
+    cipherText: btoa(String.fromCharCode(...new Uint8Array(cipher))), 
+    iv: btoa(String.fromCharCode(...iv))  // <-- hier iv in Base64 umwandeln
+  };
+}
 
   async function decryptText(cipherText, iv, key) {
     const bytes = Uint8Array.from(atob(cipherText), c => c.charCodeAt(0));
