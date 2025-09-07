@@ -20,7 +20,6 @@ function todayLocalISO() {
 
 // --- Score → Color Interpolation ---
 function scoreToColor(score) {
-  // rot = 0 → gelb = 50 → grün = 100
   const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
   score = clamp(score, 0, 100);
 
@@ -28,17 +27,22 @@ function scoreToColor(score) {
 
   if (score <= 50) {
     // rot → gelb
-    const t = score / 50; // 0..1
+    const t = score / 50;
     r = 255;
     g = Math.round(255 * t);
   } else {
     // gelb → grün
-    const t = (score - 50) / 50; // 0..1
+    const t = (score - 50) / 50;
     r = Math.round(255 * (1 - t));
     g = 255;
   }
 
   return `rgb(${r},${g},${b})`;
+}
+
+// --- Base64 → Uint8Array ---
+function base64ToBytes(base64) {
+  return Uint8Array.from(atob(base64), c => c.charCodeAt(0));
 }
 
 export default function App() {
@@ -110,10 +114,10 @@ export default function App() {
   }
 
   async function decryptText(cipherText, iv, key) {
+    if (!iv) return cipherText; // fallback, falls kein IV vorhanden
     const bytes = Uint8Array.from(atob(cipherText), c => c.charCodeAt(0));
-    const ivBytes = Uint8Array.from(atob(iv), c => c.charCodeAt(0));
     const decrypted = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: ivBytes },
+      { name: "AES-GCM", iv: base64ToBytes(iv) },
       key,
       bytes
     );
@@ -163,7 +167,7 @@ export default function App() {
 
       const decryptedEntries = await Promise.all(entriesData.map(async e => ({
         ...e,
-        text: e.text && userKey ? await decryptText(e.text, e.iv, userKey) : "",
+        text: e.text && e.iv ? await decryptText(e.text, e.iv, userKey) : "",
         color: e.color || scoreToColor(e.score)
       })));
 
@@ -177,7 +181,9 @@ export default function App() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, [user, userKey]);
+  useEffect(() => {
+    if (user && userKey) load();
+  }, [user, userKey]);
 
   // --- Save entry ---
   async function saveEntry() {
