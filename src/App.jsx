@@ -18,6 +18,29 @@ function todayLocalISO() {
   return new Date(now.getTime() - offMs).toISOString().slice(0, 10);
 }
 
+// --- Score → Color Interpolation ---
+function scoreToColor(score) {
+  // rot = 0 → gelb = 50 → grün = 100
+  const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+  score = clamp(score, 0, 100);
+
+  let r, g, b = 0;
+
+  if (score <= 50) {
+    // rot → gelb
+    const t = score / 50; // 0..1
+    r = 255;
+    g = Math.round(255 * t);
+  } else {
+    // gelb → grün
+    const t = (score - 50) / 50; // 0..1
+    r = Math.round(255 * (1 - t));
+    g = 255;
+  }
+
+  return `rgb(${r},${g},${b})`;
+}
+
 export default function App() {
   const [date, setDate] = useState(todayLocalISO());
   const [score, setScore] = useState(50);
@@ -71,25 +94,26 @@ export default function App() {
   }
 
   // --- Verschlüsselung / Entschlüsselung ---
-async function encryptText(plainText, key) {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const enc = new TextEncoder();
-  const encoded = enc.encode(plainText);
-  const cipher = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
-    key,
-    encoded
-  );
-  return { 
-    cipherText: btoa(String.fromCharCode(...new Uint8Array(cipher))), 
-    iv: btoa(String.fromCharCode(...iv))  // <-- hier iv in Base64 umwandeln
-  };
-}
+  async function encryptText(plainText, key) {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const enc = new TextEncoder();
+    const encoded = enc.encode(plainText);
+    const cipher = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
+      key,
+      encoded
+    );
+    return { 
+      cipherText: btoa(String.fromCharCode(...new Uint8Array(cipher))), 
+      iv: btoa(String.fromCharCode(...iv))
+    };
+  }
 
   async function decryptText(cipherText, iv, key) {
     const bytes = Uint8Array.from(atob(cipherText), c => c.charCodeAt(0));
+    const ivBytes = Uint8Array.from(atob(iv), c => c.charCodeAt(0));
     const decrypted = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: new Uint8Array(iv) },
+      { name: "AES-GCM", iv: ivBytes },
       key,
       bytes
     );
@@ -137,10 +161,10 @@ async function encryptText(plainText, key) {
       const entriesData = await eRes.json();
       const statsData = await sRes.json();
 
-      // Text entschlüsseln
       const decryptedEntries = await Promise.all(entriesData.map(async e => ({
         ...e,
-        text: e.text && userKey ? await decryptText(e.text, e.iv, userKey) : ""
+        text: e.text && userKey ? await decryptText(e.text, e.iv, userKey) : "",
+        color: e.color || scoreToColor(e.score)
       })));
 
       setEntries(decryptedEntries);
@@ -166,13 +190,22 @@ async function encryptText(plainText, key) {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
 
+      const color = scoreToColor(score);
+
       const res = await fetch(`${API}/entries`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ date, score: Number(score), badge, text: cipherText, iv })
+        body: JSON.stringify({ 
+          date, 
+          score: Number(score), 
+          badge, 
+          text: cipherText, 
+          iv, 
+          color
+        })
       });
 
       if (!res.ok) {
@@ -211,7 +244,7 @@ async function encryptText(plainText, key) {
   // --- Chart data ---
   const chartData = useMemo(() => {
     const copy = [...entries].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
-    return copy.map(e => ({ date: e.date.slice(0, 10), score: e.score }));
+    return copy.map(e => ({ date: e.date.slice(0, 10), score: e.score, color: e.color }));
   }, [entries]);
 
   // --- Render ---
@@ -249,8 +282,8 @@ async function encryptText(plainText, key) {
 
             <label>
               Score: <b>{score}</b>
-              <input type="range" min="1" max="100" value={score} onChange={(e) => setScore(Number(e.target.value))} style={{ width: "100%" }} />
-              <input type="number" min="1" max="100" value={score} onChange={(e) => setScore(Number(e.target.value))} />
+              <input type="range" min="0" max="100" value={score} onChange={(e) => setScore(Number(e.target.value))} style={{ width: "100%" }} />
+              <input type="number" min="0" max="100" value={score} onChange={(e) => setScore(Number(e.target.value))} />
             </label>
 
             <label>
@@ -278,7 +311,9 @@ async function encryptText(plainText, key) {
                     <XAxis dataKey="date" />
                     <YAxis domain={[0, 100]} />
                     <Tooltip />
-                    <Line type="monotone" dataKey="score" dot />
+                    <Line type="monotone" dataKey="score" stroke="#333" dot={({ payload }) => (
+                      <circle r={4} fill={payload.color} />
+                    )} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -293,7 +328,7 @@ async function encryptText(plainText, key) {
             {!entries.length && <p>Noch keine Einträge 🙃</p>}
             <ul style={{ listStyle: "none", padding: 0, display: "grid", gap: 8 }}>
               {entries.map(e => (
-                <li key={e.id} style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
+                <li key={e.id} style={{ border: `2px solid ${e.color}`, borderRadius: 8, padding: 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
                     <div>
                       <b>{e.date.slice(0, 10)}</b> — {e.score}/100 {e.badge && <span>{e.badge}</span>}
