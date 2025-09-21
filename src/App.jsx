@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from "recharts";
+import { Link } from "react-router-dom";
 
 // Supabase Client
 const supabase = createClient(
@@ -172,6 +173,7 @@ export default function App() {
       })));
 
       setEntries(decryptedEntries);
+      localStorage.setItem("entries", JSON.stringify(decryptedEntries));
       setStats(statsData);
     } catch (err) {
       console.error(err);
@@ -279,6 +281,9 @@ export default function App() {
         <>
           <h1>🌞 Day Rater</h1>
           <p style={{ opacity: 0.8 }}>Jeden Tag zwischen <b>1–100</b> bewerten + Notiz festhalten.</p>
+
+          <button onClick={signOut} style={{ marginBottom: 16 }}>Logout</button>
+          <Link to="/entries" style={{ marginLeft: 8 }}>📋 Alle Einträge</Link>
 
           <section style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr" }}>
             <label>
