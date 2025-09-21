@@ -67,12 +67,11 @@ export default function App() {
     }
     init();
 
-    const { subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) getUserKey(session.user.id).then(setUserKey);
-    });
-
-    return () => subscription.unsubscribe();
+      const unsubscribe = supabase.auth.onAuthStateChange((_event, session) => {
+        setUser(session?.user ?? null);
+        if (session?.user) getUserKey(session.user.id).then(setUserKey);
+      });
+      return () => unsubscribe(); // <-- einfach die Funktion aufrufen
   }, []);
 
   async function getUserKey(userId) {
