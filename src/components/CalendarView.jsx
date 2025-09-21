@@ -33,17 +33,30 @@ export default function CalendarView({ entries }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
       {days.map(day => (
-        <div key={day} style={{ border: "1px solid #ccc", minHeight: 60, padding: 4, position: "relative" }}>
+        <div 
+          key={day} 
+          style={{ 
+            border: entriesByDate[day]?.length 
+              ? `2px solid ${entriesByDate[day][0].color}` 
+              : "1px solid #ccc", 
+            minHeight: 60, 
+            padding: 4, 
+            position: "relative", 
+            borderRadius: 6 
+          }}
+        >
           <div style={{ fontSize: 12, marginBottom: 2 }}>{day.slice(-2)}</div>
+
           {entriesByDate[day]?.map((e, i) => (
             <div key={i} style={{
-              backgroundColor: e.color,
-              borderRadius: 4,
               padding: "2px 4px",
               fontSize: 12,
               marginTop: 2,
+              fontWeight: "bold",
+              border: `1px solid ${e.color}`,
+              borderRadius: 4,
               color: "#000",
-              fontWeight: "bold"
+              backgroundColor: "#fff"
             }}>
               {e.badge || "🏷"} {e.score}
             </div>
