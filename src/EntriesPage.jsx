@@ -57,7 +57,7 @@ export default function EntriesPage() {
         <ul style={{ listStyle: "none", padding: 0, display: "grid", gap: 8 }}>
           {filtered.map(e => (
             <li key={e.id} style={{ border: `2px solid ${e.color}`, borderRadius: 8, padding: 12 }}>
-              <b>{e.date}</b> — {e.score}/100 {e.badge && <span>{e.badge}</span>}
+              <b>{new Date(e.date).toLocaleDateString()}</b> — {e.score}/100 {e.badge && <span>{e.badge}</span>}
               {e.text && <div>{e.text}</div>}
             </li>
           ))}
