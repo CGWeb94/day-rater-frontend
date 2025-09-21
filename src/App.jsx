@@ -67,12 +67,14 @@ export default function App() {
     }
     init();
 
-      const unsubscribe = supabase.auth.onAuthStateChange((_event, session) => {
-        setUser(session?.user ?? null);
-        if (session?.user) getUserKey(session.user.id).then(setUserKey);
-      });
-      return () => unsubscribe(); // <-- einfach die Funktion aufrufen
-  }, []);
+  const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    setUser(session?.user ?? null);
+    if (session?.user) getUserKey(session.user.id).then(setUserKey);
+  });
+
+  return () => listener?.subscription?.unsubscribe?.(); // sicher auf undefined prüfen
+}, []);
+
 
   async function getUserKey(userId) {
     const savedKey = localStorage.getItem(`key_${userId}`);
