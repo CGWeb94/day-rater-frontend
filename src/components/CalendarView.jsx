@@ -1,50 +1,55 @@
-import { useState } from "react";
-import dayjs from "dayjs";
+import { useMemo } from "react";
 
 export default function CalendarView({ entries }) {
-  const [month, setMonth] = useState(dayjs());
+  // --- Einträge nach Datum gruppieren ---
+  const entriesByDate = useMemo(() => {
+    const map = {};
+    entries.forEach(e => {
+      if (!map[e.date]) map[e.date] = [];
+      map[e.date].push(e);
+    });
+    return map;
+  }, [entries]);
 
-  const startOfMonth = month.startOf("month");
-  const endOfMonth = month.endOf("month");
-  const daysInMonth = month.daysInMonth();
-
-  const entriesByDate = Object.fromEntries(entries.map(e => [e.date, e]));
-
-  const days = [];
-  for (let i = 1; i <= daysInMonth; i++) {
-    const dateStr = month.date(i).format("YYYY-MM-DD");
-    const entry = entriesByDate[dateStr];
-    days.push({ day: i, dateStr, entry });
+  // --- Hilfsfunktion: Tage des aktuellen Monats ---
+  function generateMonthDays() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const date = new Date(year, month, 1);
+    const days = [];
+    while (date.getMonth() === month) {
+      const yyyy = date.getFullYear();
+      const mm = String(date.getMonth() + 1).padStart(2, "0");
+      const dd = String(date.getDate()).padStart(2, "0");
+      days.push(`${yyyy}-${mm}-${dd}`);
+      date.setDate(date.getDate() + 1);
+    }
+    return days;
   }
 
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-        <button onClick={() => setMonth(month.subtract(1, "month"))}>←</button>
-        <span>{month.format("MMMM YYYY")}</span>
-        <button onClick={() => setMonth(month.add(1, "month"))}>→</button>
-      </div>
+  const days = generateMonthDays();
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
-        {["Mo","Di","Mi","Do","Fr","Sa","So"].map(d => (
-          <div key={d} style={{ fontWeight: "bold", textAlign: "center" }}>{d}</div>
-        ))}
-        {Array(startOfMonth.day() === 0 ? 6 : startOfMonth.day()-1).fill(null).map((_,i) => (
-          <div key={"empty-"+i}></div>
-        ))}
-        {days.map(d => (
-          <div key={d.day} style={{
-            border: d.entry ? `2px solid ${d.entry.color}` : "1px solid #ccc",
-            borderRadius: 6,
-            textAlign: "center",
-            padding: 8,
-            minHeight: 60
-          }}>
-            <div>{d.day}</div>
-            {d.entry && <div style={{ fontSize: 12 }}>{d.entry.score}</div>}
-          </div>
-        ))}
-      </div>
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+      {days.map(day => (
+        <div key={day} style={{ border: "1px solid #ccc", minHeight: 60, padding: 4, position: "relative" }}>
+          <div style={{ fontSize: 12, marginBottom: 2 }}>{day.slice(-2)}</div>
+          {entriesByDate[day]?.map((e, i) => (
+            <div key={i} style={{
+              backgroundColor: e.color,
+              borderRadius: 4,
+              padding: "2px 4px",
+              fontSize: 12,
+              marginTop: 2,
+              color: "#000",
+              fontWeight: "bold"
+            }}>
+              {e.badge || "🏷"} {e.score}
+            </div>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }

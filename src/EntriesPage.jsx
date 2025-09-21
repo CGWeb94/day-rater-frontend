@@ -7,16 +7,18 @@ export default function EntriesPage() {
   const [sort, setSort] = useState("date-desc"); // "date-asc", "score-asc", "score-desc"
 
   // --- Einträge aus localStorage laden ---
-  // Für jetzt: wir erwarten, dass App.jsx Einträge in localStorage oder Context legt.
-  // Später kannst du das mit deinem API-Call kombinieren.
   const entries = JSON.parse(localStorage.getItem("entries") || "[]");
+
+  // --- Alle verfügbaren Badges für Filter ---
+  const allBadges = useMemo(() => {
+    return [...new Set(entries.map(e => e.badge).filter(Boolean))];
+  }, [entries]);
 
   // --- Gefilterte & sortierte Einträge ---
   const filtered = useMemo(() => {
     let data = [...entries];
-    if (filterBadge) {
-      data = data.filter(e => e.badge === filterBadge);
-    }
+    if (filterBadge) data = data.filter(e => e.badge === filterBadge);
+
     switch (sort) {
       case "date-asc": data.sort((a,b) => a.date.localeCompare(b.date)); break;
       case "score-asc": data.sort((a,b) => a.score - b.score); break;
@@ -34,7 +36,7 @@ export default function EntriesPage() {
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         <select value={filterBadge} onChange={e => setFilterBadge(e.target.value)}>
           <option value="">Alle Badges</option>
-          {[...new Set(entries.map(e => e.badge).filter(Boolean))].map(b => (
+          {allBadges.map(b => (
             <option key={b} value={b}>{b}</option>
           ))}
         </select>
